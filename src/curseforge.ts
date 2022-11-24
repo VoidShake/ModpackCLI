@@ -1,7 +1,7 @@
 import archiver from 'archiver'
 import axios, { AxiosInstance } from 'axios'
 import FormData from 'form-data'
-import { createReadStream, createWriteStream, existsSync, readdirSync, unlinkSync } from 'fs'
+import { createReadStream, createWriteStream, existsSync, readdirSync, readFileSync, unlinkSync } from 'fs'
 import fs from 'fs-extra'
 import minimatch from 'minimatch'
 import { join } from 'path'
@@ -109,19 +109,22 @@ export default class CurseforgeService {
       await this.api.post(`projects/${this.options.curseforgeProject}/upload-file`, { data })
    }
 
-   private async removeClientContent(config = 'client-only.json') {
+   private async removeClientContent(config = '.serverignore') {
       rimraf.sync('kubejs/assets')
 
       if (existsSync(config)) {
-         const remove: string[] = fs.readJsonSync(config)
+         const excludePatterns: string[] = readFileSync(config)
+            .toString()
+            .split('\n')
+            .map(it => it.trim())
 
-         const matches = readdirSync('mods').filter(file => remove.some(pattern => minimatch(file, pattern)))
+         const matches = readdirSync('mods').filter(file => excludePatterns.some(pattern => minimatch(file, pattern)))
 
          matches.forEach(f => {
             unlinkSync(join('mods', f))
          })
 
-         console.log(`Removed ${matches.length} files using ${remove.length} patterns`)
+         console.log(`Removed ${matches.length} files using ${excludePatterns.length} patterns`)
       }
    }
 }
