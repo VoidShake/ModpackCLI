@@ -117,6 +117,7 @@ export default class CurseforgeService {
             .toString()
             .split('\n')
             .map(it => it.trim())
+            .filter(it => !it.startsWith('#'))
 
          const matches = readdirSync('mods').filter(file => excludePatterns.some(pattern => minimatch(file, pattern)))
 
