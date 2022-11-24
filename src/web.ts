@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import chalk from 'chalk'
 import FormData from 'form-data'
 import { createReadStream, existsSync, readdirSync, readFileSync } from 'fs'
 import fs from 'fs-extra'
@@ -14,19 +15,21 @@ export interface WebOptions {
 }
 
 export const defaultWebDir = 'web'
-export const defaultApiUrl = 'https://pack.macarena.ceo/api'
+export const defaultApiUrl = 'https://packs.macarena.ceo/api'
 
 export default class WebService {
    private readonly api: AxiosInstance
    private readonly dir: string
+   private readonly baseUrl: string
 
-   constructor(private readonly options: Readonly<WebOptions>) {
+   constructor(options: Readonly<WebOptions>) {
       if (!options.webToken) throw new Error('Web Token missing')
 
       this.dir = options.webDir ?? defaultWebDir
+      this.baseUrl = options.apiUrl ?? defaultApiUrl
 
       this.api = axios.create({
-         baseURL: options.apiUrl ?? defaultApiUrl,
+         baseURL: this.baseUrl,
          headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${options.webToken}`,
@@ -40,7 +43,7 @@ export default class WebService {
    }
 
    async updateWeb() {
-      console.group('Updating web')
+      console.group(`Updating web at ${chalk.underline(this.baseUrl)}`)
 
       await Promise.all([...this.updatePages(), this.updateData(), this.updateAssets()])
 

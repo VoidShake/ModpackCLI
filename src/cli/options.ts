@@ -156,7 +156,7 @@ export default function parseCliOptions(): CliOptions {
    if (args['--path']) paths.push(...args['--path'])
 
    return {
-      apiUrl: args['--api-url'] ?? config?.apiUrl ?? defaultApiUrl,
+      apiUrl: args['--api-url'] ?? config?.apiUrl,
       webToken: args['--web-token'],
       webDir,
       curseforgeToken: args['--curseforge-token'],
