@@ -1,7 +1,7 @@
 {
    "name": "@voidshake/modpack-cli",
    "version": "0.0.0-dev",
-   "description": "Modpack CLI",
+   "description": "CLI to release modpacks",
    "main": "dist/index.js",
    "exports": "./dist/index.js",
    "bin": {
