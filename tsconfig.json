@@ -1,0 +1,19 @@
+{
+   "compilerOptions": {
+      "outDir": "dist",
+      "strict": true,
+      "lib": ["es2018", "dom"],
+      "target": "es2018",
+      "moduleResolution": "node",
+      "module": "ES2022",
+      "sourceMap": true,
+      "resolveJsonModule": true,
+      "esModuleInterop": true,
+      "emitDecoratorMetadata": true,
+      "experimentalDecorators": true,
+      "declaration": true,
+      "declarationMap": true,
+      "rootDir": "src"
+   },
+   "exclude": ["node_modules", "dist"]
+}
