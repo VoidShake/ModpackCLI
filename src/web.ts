@@ -47,7 +47,7 @@ export default class WebService {
       console.groupEnd()
    }
 
-   async updateData() {
+   private async updateData() {
       const packData = readPackData(this.dir)
 
       if (!packData) {
@@ -59,7 +59,7 @@ export default class WebService {
       console.log('Updated pack data')
    }
 
-   async updateAssets() {
+   private async updateAssets() {
       const assetsDir = join(this.dir, 'assets')
 
       if (!existsSync(assetsDir)) {
@@ -79,7 +79,7 @@ export default class WebService {
       console.log(`Updated assets`)
    }
 
-   updatePages() {
+   private updatePages() {
       const pageDir = join(this.dir, 'pages')
 
       if (!existsSync(pageDir)) {

@@ -109,7 +109,7 @@ export default class CurseforgeService {
       await this.api.post(`projects/${this.options.curseforgeProject}/upload-file`, { data })
    }
 
-   async removeClientContent(config = 'client-only.json') {
+   private async removeClientContent(config = 'client-only.json') {
       rimraf.sync('kubejs/assets')
 
       if (existsSync(config)) {
