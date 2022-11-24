@@ -1,9 +1,9 @@
 import arg from 'arg'
 import commandLineUsage, { OptionDefinition, Section } from 'command-line-usage'
 import { CurseforgeOptions } from '../curseforge.js'
-import { defaultApiUrl, readPackData, WebOptions } from '../web.js'
+import { defaultApiUrl, defaultWebDir, readPackData, WebOptions } from '../web.js'
 
-const defaultPaths = ['config', 'mods', 'kubejs', 'defaultconfigs']
+export const defaultPaths = ['config', 'mods', 'kubejs', 'defaultconfigs']
 
 const optionDefinitions: OptionDefinition[] = [
    {
@@ -18,7 +18,7 @@ const optionDefinitions: OptionDefinition[] = [
    },
    {
       name: 'web-dir',
-      defaultValue: './web',
+      defaultValue: defaultWebDir,
       typeLabel: '{underline file}',
       description: 'Directory of the web assets',
    },
@@ -117,7 +117,7 @@ export interface ReleaseOptions {
    name?: string
 }
 
-interface CliOptions extends WebOptions, CurseforgeOptions, Partial<ReleaseOptions> {
+interface CliOptions extends Partial<ReleaseOptions & WebOptions & CurseforgeOptions> {
    params: string[]
    name?: string
 }

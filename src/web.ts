@@ -9,17 +9,21 @@ import type { MinecraftInstance, PackData, Release, WebData } from './types'
 
 export interface WebOptions {
    apiUrl?: string
-   webToken?: string
-   webDir: string
+   webDir?: string
+   webToken: string
 }
 
+export const defaultWebDir = 'web'
 export const defaultApiUrl = 'https://pack.macarena.ceo/api'
 
 export default class WebService {
    private readonly api: AxiosInstance
+   private readonly dir: string
 
    constructor(private readonly options: Readonly<WebOptions>) {
       if (!options.webToken) throw new Error('Web Token missing')
+
+      this.dir = options.webDir ?? defaultWebDir
 
       this.api = axios.create({
          baseURL: options.apiUrl ?? defaultApiUrl,
@@ -44,7 +48,7 @@ export default class WebService {
    }
 
    async updateData() {
-      const packData = readPackData(this.options.webDir)
+      const packData = readPackData(this.dir)
 
       if (!packData) {
          console.warn('Skip updating pack data')
@@ -56,7 +60,7 @@ export default class WebService {
    }
 
    async updateAssets() {
-      const assetsDir = join(this.options.webDir, 'assets')
+      const assetsDir = join(this.dir, 'assets')
 
       if (!existsSync(assetsDir)) {
          console.warn('No assets defined')
@@ -76,7 +80,7 @@ export default class WebService {
    }
 
    updatePages() {
-      const pageDir = join(this.options.webDir, 'pages')
+      const pageDir = join(this.dir, 'pages')
 
       if (!existsSync(pageDir)) {
          console.warn('No pages defined')
@@ -137,9 +141,9 @@ export function readPackData(dir: string): Partial<PackData> | null {
    return yaml.parse(readFileSync(file).toString())
 }
 
-export async function getPackName(options: WebOptions) {
-   if (options.webToken && options.apiUrl) {
-      const service = new WebService(options)
+export async function getPackName(options: Partial<WebOptions>) {
+   if (options.webToken) {
+      const service = new WebService(options as WebOptions)
       const data = await service.getWebData()
       return data.name
    } else {

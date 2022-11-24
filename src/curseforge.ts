@@ -11,18 +11,15 @@ import type { MinecraftInstance } from './types'
 import { getPackName, WebOptions } from './web.js'
 
 export interface CurseforgeOptions {
-   curseforgeToken?: string
-   curseforgeProject?: number
+   curseforgeToken: string
+   curseforgeProject: number
    paths: string[]
 }
 
 export default class CurseforgeService {
    private readonly api: AxiosInstance
 
-   constructor(private readonly options: Readonly<CurseforgeOptions & WebOptions>) {
-      if (!options.curseforgeToken) throw new Error('CurseForge token missing')
-      if (!options.curseforgeProject) throw new Error('CurseForge project ID missing')
-
+   constructor(private readonly options: Readonly<CurseforgeOptions & Partial<WebOptions>>) {
       this.api = axios.create({
          baseURL: 'https://minecraft.curseforge.com/api',
          headers: {
