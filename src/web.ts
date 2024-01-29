@@ -4,8 +4,9 @@ import FormData from 'form-data'
 import { createReadStream, existsSync, readdirSync, readFileSync } from 'fs'
 import { basename, extname, join } from 'path'
 import yaml from 'yaml'
-import { ReleaseOptions } from './cli/options.js'
+import { CliOptions, ReleaseOptions } from './cli/options.js'
 import { IMod } from './models/index.js'
+import { parsePack } from './pack.js'
 import type { PackData, Release, WebData } from './types.js'
 
 export interface WebOptions {
@@ -17,12 +18,18 @@ export interface WebOptions {
 export const defaultWebDir = 'web'
 export const defaultApiUrl = 'https://packs.macarena.ceo/api'
 
+function validateRelease<T>(options: T & Partial<ReleaseOptions>): asserts options is T & ReleaseOptions {
+   if (!options.version) throw new Error('Version missing')
+   if (!options.changelog) throw new Error('Changelog missing')
+   if (!options.releaseType) throw new Error('Release-Type missing')
+}
+
 export default class WebService {
    private readonly api: AxiosInstance
    private readonly dir: string
    private readonly baseUrl: string
 
-   constructor(options: Readonly<WebOptions>) {
+   constructor(private readonly options: Readonly<CliOptions & WebOptions>) {
       if (!options.webToken) throw new Error('Web Token missing')
 
       this.dir = options.webDir ?? defaultWebDir
@@ -116,6 +123,16 @@ export default class WebService {
       })
    }
 
+   async parseAndCreateRelease() {
+      const options = { ...this.options }
+      const { mods, version } = await parsePack(options)
+
+      if (!options.version) options.version = version
+      validateRelease(options)
+
+      await this.createRelease(mods, options)
+   }
+
    async createRelease(mods: IMod[], release: ReleaseOptions) {
       const releaseData: Release = {
          date: new Date().toISOString(),
@@ -138,15 +155,4 @@ export function readPackData(dir: string): Partial<PackData> | null {
    const file = join(dir, 'pack.yml')
    if (!existsSync(file)) return null
    return yaml.parse(readFileSync(file).toString())
-}
-
-export async function getPackName(options: Partial<WebOptions>) {
-   if (options.webToken) {
-      const service = new WebService(options as WebOptions)
-      const data = await service.getWebData()
-      return data.name
-   } else {
-      const packData = readPackData(options.webDir ?? 'web')
-      return packData?.name
-   }
 }
