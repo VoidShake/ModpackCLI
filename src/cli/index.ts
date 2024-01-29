@@ -1,7 +1,10 @@
+import { isAxiosError } from 'axios'
 import chalk from 'chalk'
-import CurseforgeService, { CurseforgeOptions } from '../curseforge.js'
+import { existsSync, readFileSync } from 'fs'
+import CurseforgeService, { CurseforgeOptions, validateCurseforgeOptions } from '../curseforge.js'
+import PackwizService, { PackwizOptions, validatePackwizOptions } from '../packwiz.js'
 import WebService, { WebOptions } from '../web.js'
-import parseCliOptions, { Action, ReleaseOptions } from './options.js'
+import parseCliOptions, { CliOptions, ReleaseOptions } from './options.js'
 
 function validateRelease<T>(options: T & Partial<ReleaseOptions>): asserts options is T & ReleaseOptions {
    if (!options.version) throw new Error('Version missing')
@@ -13,41 +16,64 @@ function validateWebOptions<T>(options: T & Partial<WebOptions>): asserts option
    if (!options.webToken) throw new Error('Web Token missing')
 }
 
-function validateCurseforgeOptions<T>(
-   options: T & Partial<CurseforgeOptions>
-): asserts options is T & CurseforgeOptions {
-   if (!options.curseforgeProject) throw new Error('CurseForge Project-ID missing')
-   if (!options.curseforgeToken) throw new Error('CurseForge Token missing')
-   if (!options.paths) throw new Error('Pack path are missing')
+function fromMinecraftInstance(options: CurseforgeOptions) {
+   const file = options.curseforgePackFile ?? 'minecraftinstance.json'
+   if (!existsSync(file)) throw new Error(`curseforge manifest file '${file}' does not exist`)
+
+   const curseforge = new CurseforgeService(options)
+
+   const parsed = JSON.parse(readFileSync(file).toString())
+
+   return curseforge.importCurseforgePack(parsed)
 }
+
+function fromPackwiz(options: CliOptions & PackwizOptions) {
+   const service = new PackwizService(options)
+   return service.importPackwizPack()
+}
+
+async function parsePack(options: CliOptions) {
+   if (options.curseforgePackFile || existsSync('minecraftinstance.json')) {
+      validateCurseforgeOptions(options)
+      return fromMinecraftInstance(options)
+   }
+
+   if (options.packwizFile || existsSync('pack.toml')) {
+      validatePackwizOptions(options)
+      return fromPackwiz(options)
+   }
+
+   throw new Error('No pack metadata file auto-detected')
+}
+
+const options = parseCliOptions()
 
 async function run() {
-   const { params, ...options } = parseCliOptions()
+   validateWebOptions(options)
+   const web = new WebService(options)
 
-   if (params.length === 0) {
-      throw new Error('No action defined, valid actions are [web, curseforge]')
-   }
-
-   if (params.includes(Action.WEB)) {
-      validateWebOptions(options)
-      const web = new WebService(options)
+   if (options.params.includes('update')) {
       await web.updateWeb()
-
-      if (options.version) {
-         validateRelease(options)
-         web.createRelease(options)
-      }
    }
 
-   if (params.includes(Action.CURSEFORGE)) {
-      validateCurseforgeOptions(options)
-      const curseforge = new CurseforgeService(options)
-      validateRelease(options)
+   if (options.params.includes('release')) {
+      const { mods, version } = await parsePack(options)
 
-      curseforge.createRelease(options)
+      if (!options.version) options.version = version
+
+      validateRelease(options)
+      await web.createRelease(mods, options)
    }
 }
 
-run().catch(async e => {
-   console.error(chalk.red(e.message))
+run().catch(async (e: Error) => {
+   if (options.debug) {
+      if (isAxiosError(e) && e.response?.data) {
+         console.error(e.response?.data)
+      }
+
+      console.error(chalk.red(e.stack ?? e.message))
+   } else {
+      console.error(chalk.red(e.message))
+   }
 })

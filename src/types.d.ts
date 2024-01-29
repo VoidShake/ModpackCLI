@@ -1,3 +1,5 @@
+import { IMod } from './models/index.js'
+
 export interface PackData {
    name: string
    author: string
@@ -21,7 +23,7 @@ export interface Release {
    changelog: string
 }
 
-export interface MinecraftInstance {
+export interface CurseforgeModpack {
    name: string
    baseModLoader: {
       forgeVersion: string
@@ -42,4 +44,9 @@ export interface MinecraftInstance {
          fileName: string
       }
    }>
+}
+
+export interface ImportedPack {
+   mods: IMod[]
+   version?: string
 }

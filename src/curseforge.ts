@@ -1,131 +1,149 @@
-import archiver from 'archiver'
 import axios, { AxiosInstance } from 'axios'
-import FormData from 'form-data'
-import { createReadStream, createWriteStream, existsSync, readdirSync, readFileSync, unlinkSync } from 'fs'
-import fs from 'fs-extra'
-import minimatch from 'minimatch'
-import { join } from 'path'
-import rimraf from 'rimraf'
-import { ReleaseOptions } from './cli/options.js'
-import type { MinecraftInstance } from './types'
-import { getPackName, WebOptions } from './web.js'
+import { IMod, ModData } from './models/index.js'
+import { ImportedPack } from './types.js'
+
+interface CurseforgeMod {
+   id: number
+   logo?: {
+      thumbnailUrl: string
+      url: string
+   }
+   primaryCategoryId: number
+   categories: Array<{
+      id: number
+      name: string
+   }>
+   name: string
+   slug: string
+   gamePopularityRank: number
+   links: {
+      websiteUrl?: string
+      wikiUrl?: string
+      issuesUrl?: string
+      sourceUrl?: string
+   }
+}
+
+interface CurseforgePack {
+   installedAddons: {
+      addonID: number
+      installedFile: {
+         fileDate: string
+         /** @deprecated use `fileName` */
+         displayName?: string
+         fileName: string
+         categorySectionPackageType: number
+         dependencies: Array<{
+            addonId: number
+         }>
+         modules: Array<{
+            foldername: string
+         }>
+      }
+   }[]
+}
 
 export interface CurseforgeOptions {
    curseforgeToken: string
-   curseforgeProject: number
-   paths: string[]
+   curseforgePackFile?: string
+}
+
+const libIds = [421, 425, 423, 435]
+
+export function validateCurseforgeOptions<T>(
+   options: T & Partial<CurseforgeOptions>
+): asserts options is T & CurseforgeOptions {
+   if (!options.curseforgeToken) throw new Error('CurseForge Token missing')
+}
+
+type ModDataWithId = ModData & {
+   id: number
 }
 
 export default class CurseforgeService {
    private readonly api: AxiosInstance
 
-   constructor(private readonly options: Readonly<CurseforgeOptions & Partial<WebOptions>>) {
+   constructor(options: CurseforgeOptions) {
       this.api = axios.create({
-         baseURL: 'https://minecraft.curseforge.com/api',
+         baseURL: 'https://api.curseforge.com/v1',
+         responseType: 'json',
          headers: {
-            'X-Api-Token': options.curseforgeToken,
+            Accept: 'application/json',
+            'x-api-key': options.curseforgeToken,
          },
       })
    }
 
-   async createRelease(release: ReleaseOptions) {
-      console.group('Creating zip releases for CurseForge')
-
-      const client = await this.zipAndUpload('client', release)
-
-      this.removeClientContent()
-      const server = await this.zipAndUpload('server', release)
-
-      console.groupEnd()
-
-      return { client, server }
+   private resolveMod(data: CurseforgeMod): ModDataWithId {
+      return {
+         id: data.id,
+         name: data.name,
+         slug: data.slug,
+         ...data.links,
+         categories: data.categories.map(it => it.name.replace(/[\s,]+/g, '-').toLowerCase()),
+         library: [421, 425].includes(data.primaryCategoryId) && data.categories.every(c => libIds.includes(c.id)),
+         popularityScore: data.gamePopularityRank,
+         icon: data.logo?.thumbnailUrl,
+      }
    }
 
-   private async zipAndUpload(name: string, release: ReleaseOptions) {
-      const archive = archiver('zip')
-      const file = name + '.zip'
-
-      archive.pipe(createWriteStream(file))
-      this.options.paths.forEach(dir => archive.directory(dir, join('overrides', dir)))
-
-      const manifest = await this.createManifest(release)
-      archive.append(manifest, { name: 'manifest.json' })
-
-      await archive.finalize()
-
-      await this.uploadToCurseforge(file, release)
-
-      return file
+   async fetchMod(id: number): Promise<ModDataWithId> {
+      console.log(`Fetching ${id} from curseforge`)
+      const response = await this.api.get(`/mods/${id}`)
+      return this.resolveMod(response.data.data)
    }
 
-   private async createManifest(release: ReleaseOptions) {
-      const instance = fs.readJsonSync('minecraftinstance.json') as MinecraftInstance
+   async fetchMods(ids: number[]): Promise<ModDataWithId[]> {
+      console.log(`Fetching ${ids.length} mods from curseforge`)
+      const response = await this.api.post(`/mods`, {
+         modIds: ids,
+      })
+      return response.data.data.map((it: CurseforgeMod) => this.resolveMod(it))
+   }
 
-      const files = instance.installedAddons
-         .filter(a => a.installedFile.categorySectionPackageType !== 3)
-         .filter(a => existsSync(join('mods', a.installedFile.fileName)))
-         .map(a => ({
-            projectID: a.addonID,
-            fileID: a.installedFile.id,
-            required: true,
+   /*
+export async function importCurseforgeMod(modId: number): Promise<IMod> {
+   const { logo, primaryCategoryId, categories, gamePopularityRank, links, cfID, ...values } = await getMod(modId)
+
+   const libIds = [421, 425, 423, 435]
+
+   return {
+      ...values,
+      ...links,
+      id: cfID.toString(),
+      categories,
+      library: !!([421, 425].includes(primaryCategoryId) && categories.every(c => libIds.includes(c.id))),
+      popularityScore: gamePopularityRank,
+      icon: logo?.thumbnailUrl,
+   }
+}
+*/
+
+   async importCurseforgePack(pack: CurseforgePack): Promise<ImportedPack> {
+      const addons = pack.installedAddons
+         .filter(a => a.installedFile.modules.some(m => m.foldername === 'META-INF'))
+         .map(({ addonID, installedFile }) => ({
+            cfID: addonID,
+            version: {
+               date: installedFile.fileDate,
+               file: installedFile.fileName ?? installedFile.displayName,
+            },
+            library: pack.installedAddons.some(a => a.installedFile.dependencies.some(d => d.addonId === addonID)),
          }))
 
-      console.log(`Found ${files.length} installed mods`)
+      const mods = await Promise.all(
+         addons.map<Promise<IMod>>(async ({ cfID, version, library }) => {
+            const mod = await this.fetchMod(cfID)
 
-      const manifest = {
-         minecraft: {
-            version: instance.baseModLoader.minecraftVersion,
-            modLoaders: [
-               {
-                  id: instance.baseModLoader.name,
-                  primary: true,
-               },
-            ],
-         },
-         files,
-         manifestType: 'minecraftModpack',
-         manifestVersion: 1,
-         name: (await getPackName(this.options)) ?? instance.name,
-         version: release.version,
-         author: release.author,
-         overrides: 'overrides',
-      }
-
-      return JSON.stringify(manifest, null, 2)
-   }
-
-   private async uploadToCurseforge(file: string, release: ReleaseOptions) {
-      const data = new FormData()
-      data.append('file', createReadStream(file))
-      data.append(
-         'metadata',
-         JSON.stringify({
-            changelogType: 'markdown',
-            changelog: release.changelog,
-            releaseType: release.releaseType,
+            return {
+               ...mod,
+               version: version.file,
+               id: cfID.toString(),
+               library: library && mod.library,
+            }
          })
       )
 
-      await this.api.post(`projects/${this.options.curseforgeProject}/upload-file`, { data })
-   }
-
-   private async removeClientContent(config = '.serverignore') {
-      rimraf.sync('kubejs/assets')
-
-      if (existsSync(config)) {
-         const excludePatterns: string[] = readFileSync(config)
-            .toString()
-            .split('\n')
-            .map(it => it.trim())
-            .filter(it => !it.startsWith('#'))
-
-         const matches = readdirSync('mods').filter(file => excludePatterns.some(pattern => minimatch(file, pattern)))
-
-         matches.forEach(f => {
-            unlinkSync(join('mods', f))
-         })
-
-         console.log(`Removed ${matches.length} files using ${excludePatterns.length} patterns`)
-      }
+      return { mods }
    }
 }

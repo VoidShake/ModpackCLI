@@ -2,11 +2,11 @@ import axios, { AxiosInstance } from 'axios'
 import chalk from 'chalk'
 import FormData from 'form-data'
 import { createReadStream, existsSync, readdirSync, readFileSync } from 'fs'
-import fs from 'fs-extra'
 import { basename, extname, join } from 'path'
 import yaml from 'yaml'
 import { ReleaseOptions } from './cli/options.js'
-import type { MinecraftInstance, PackData, Release, WebData } from './types'
+import { IMod } from './models/index.js'
+import type { PackData, Release, WebData } from './types.js'
 
 export interface WebOptions {
    apiUrl?: string
@@ -30,7 +30,9 @@ export default class WebService {
 
       this.api = axios.create({
          baseURL: this.baseUrl,
+         responseType: 'json',
          headers: {
+            Accept: 'application/json',
             'Content-Type': 'application/json',
             Authorization: `Bearer ${options.webToken}`,
          },
@@ -70,7 +72,10 @@ export default class WebService {
          return
       }
 
-      const assets = readdirSync(assetsDir).map(f => join(assetsDir, f))
+      const assets = readdirSync(assetsDir)
+         .filter(it => ['.png', '.jpg', '.jpeg'].includes(extname(it)))
+         .map(f => join(assetsDir, f))
+
       const assetsData = assets.reduce((data, img) => {
          data.append(basename(img), createReadStream(img))
          return data
@@ -111,16 +116,7 @@ export default class WebService {
       })
    }
 
-   async createRelease(release: ReleaseOptions) {
-      const cfFile = 'minecraftinstance.json'
-      if (!existsSync(cfFile)) throw new Error('minecraftinstance.json file missing')
-
-      const cfData = fs.readJsonSync(cfFile) as MinecraftInstance
-
-      const installedAddons = cfData.installedAddons.filter(addon =>
-         existsSync(join('mods', addon.installedFile.fileName))
-      )
-
+   async createRelease(mods: IMod[], release: ReleaseOptions) {
       const releaseData: Release = {
          date: new Date().toISOString(),
          name: release.version,
@@ -128,7 +124,7 @@ export default class WebService {
       }
 
       const { data } = await this.api.put(`/pack/release/${release.version}`, {
-         installedAddons,
+         mods,
          ...releaseData,
       })
 
