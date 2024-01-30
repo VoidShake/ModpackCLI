@@ -60,6 +60,20 @@ type ModDataWithId = ModData & {
    id: number
 }
 
+const categoryReplacements: Record<string, string[]> = {
+   'api-and-library': ['library'],
+   'world-gen': ['worldgen'],
+   'ores-and-resources': ['worldgen'],
+   dimensions: ['$', 'worldgen'],
+   'utility-&-qol': ['utility'],
+   'server-utility': ['$', 'utility'],
+   'armor-tools-and-weapons': ['equipment'],
+}
+
+function uniq<T>(array: T[]) {
+   return array.filter((v1, i1) => !array.some((v2, i2) => v1 === v2 && i2 < i1))
+}
+
 export default class CurseforgeService {
    private readonly api: AxiosInstance
 
@@ -74,13 +88,24 @@ export default class CurseforgeService {
       })
    }
 
+   private resolveCategory(from: string) {
+      const snakeCase = from.replace(/[\s,]+/g, '-').toLowerCase()
+      if (snakeCase in categoryReplacements) {
+         return categoryReplacements[snakeCase].map(it => {
+            if (it === '$') return snakeCase
+            return it
+         })
+      }
+      return [snakeCase]
+   }
+
    private resolveMod(data: CurseforgeMod): ModDataWithId {
       return {
          id: data.id,
          name: data.name,
          slug: data.slug,
          ...data.links,
-         categories: data.categories.map(it => it.name.replace(/[\s,]+/g, '-').toLowerCase()),
+         categories: uniq(data.categories.flatMap(it => this.resolveCategory(it.name))),
          library: [421, 425].includes(data.primaryCategoryId) && data.categories.every(c => libIds.includes(c.id)),
          popularityScore: data.gamePopularityRank,
          icon: data.logo?.thumbnailUrl,
