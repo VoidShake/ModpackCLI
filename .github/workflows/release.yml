@@ -13,23 +13,25 @@ jobs:
       steps:
          - uses: actions/checkout@v3
 
+         - uses: pnpm/action-setup@v4
+           with:
+              run_install: |
+                 - recursive: true
+                   args: [--frozen-lockfile, --strict-peer-dependencies]
+           env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+         - uses: actions/setup-node@v4
+           with:
+              node-version: 18
+              cache: pnpm
+
          - name: Update version
            uses: jossef/action-set-json-field@v2
            with:
               file: package.json
               field: version
               value: ${{ github.event.release.tag_name }}
-
-         - uses: actions/setup-node@v4
-
-         - uses: pnpm/action-setup@v2
-           with:
-              version: 8.11.0
-              run_install: |
-                 - recursive: true
-                   args: [--frozen-lockfile, --strict-peer-dependencies]
-           env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
          - run: pnpm run build
          - run: npm publish
