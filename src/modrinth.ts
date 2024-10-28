@@ -13,7 +13,7 @@ interface ModrinthMod {
    title: string
    categories: string[]
    downloads?: number
-   icon_url: string
+   icon_url: string | null
 }
 
 type ModDataWithId = ModData & {
@@ -47,7 +47,7 @@ export default class ModrinthService {
          name: data.title,
          slug: data.slug,
          categories: data.categories ?? [],
-         icon: data.icon_url,
+         icon: data.icon_url ?? undefined,
          popularityScore: data.downloads,
          summary: data.description,
          websiteUrl: `https://modrinth.com/mod/${data.slug}`,
