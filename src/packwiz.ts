@@ -45,7 +45,13 @@ interface CurseforgeUpdateData {
    'file-id': number
 }
 
-type ResolvedMod = FileMod | ModrinthUpdateData | CurseforgeUpdateData
+interface GithubUpdateData {
+   type: 'github'
+   slug: string
+   tag: string
+}
+
+type ResolvedMod = FileMod | ModrinthUpdateData | CurseforgeUpdateData | GithubUpdateData
 
 interface PackwizMod {
    name: string
@@ -56,6 +62,7 @@ interface PackwizMod {
    update?: {
       modrinth?: Omit<ModrinthUpdateData, 'type'>
       curseforge?: Omit<CurseforgeUpdateData, 'type'>
+      github?: Omit<GithubUpdateData, 'type'>
    }
 }
 
@@ -141,6 +148,13 @@ export default class PackwizService {
             }
          }
 
+         if (definition.update?.github) {
+            return {
+               type: 'github',
+               ...definition.update.github,
+            }
+         }
+
          throw new Error(`File ${file} missing update information`)
       }
 
@@ -189,6 +203,20 @@ export default class PackwizService {
                ...a,
                id: a.id.toString(),
                version: curseforgeMods.find(b => b['project-id'] === a.id)?.['file-id']!.toString(),
+            }))
+         )
+      }
+
+      const githubMods = resolvedMods.filter(it => it.type === 'github') as GithubUpdateData[]
+      if (githubMods.length > 0) {
+         mods.push(
+            ...githubMods.map<IMod>(a => ({
+               id: a.slug,
+               name: a.slug.split('/')[1],
+               version: a.tag,
+               categories: [],
+               slug: a.slug,
+               websiteUrl: `https://github.com/${a.slug}`,
             }))
          )
       }
